@@ -1,0 +1,136 @@
+"""
+Ducktail Joint Visualization Tool
+=================================
+
+This script visualizes a **ducktail joint**, commonly used in woodworking and joinery 
+for strong interlocking connections between two pieces. The "pins" in a ducktail joint 
+are trapezoidal shapes with a narrow base and wider top, offering resistance to pulling apart.
+
+The tool:
+- Generates and plots the coordinates of ducktail pins.
+- Highlights pins across a vertical joint line of length `l`.
+- Labels each pin with coordinates for easy reference.
+
+User Parameters:
+----------------
+Set the following values before running the script in the unit of choice:
+
+- h      : Height of each ducktail pin (e.g. 60)
+- b      : Bottom (narrow) width of each pin (e.g. 20)
+- l      : Total vertical joint length (e.g. 200)
+- ratio  : Top widening ratio of each pin, as a fraction of height (e.g. 1/8 or 1/6) to set the angle of the trapezoid
+- lambd  : Spacing ratio. `lambd = 3` means pins are spaced with 1/3 of their own width.
+
+"""
+# Parameters
+
+h = 60          # Height of each pin
+b = 20          # Width of the pin small base
+l = 200         # Length of the joint (vertical)
+ratio = 1 / 8   # Pin widening ratio (widening/height)
+lambd = 2       # Spacing ratio (λ)
+
+######################################################################################
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+
+def plot_ducktail_shape(h, b, l, ratio, lambd):
+    a = h * ratio
+    c = b + 2 * a + (2 * a + b) / lambd
+
+    fig, ax = plt.subplots(figsize=(10, 12))
+    points = []
+    seen = set()
+
+    units_up = 20
+    units_down = 20
+
+    # Generate symmetric pin points
+    for unit in range(-units_down, units_up + 1):
+        offset = unit * c
+
+        current_points = [
+            (0, offset + b / 2),
+            (h, offset + b / 2 + a),
+            (h, offset + c - b / 2 - a),
+            (0, offset + c - b / 2),
+            (0, offset + c + b / 2),
+            (h, offset + c + b / 2 + a)
+        ]
+
+        # Add original and mirrored points
+        for pt in current_points + [(x, -y) for (x, y) in current_points]:
+            key = (round(pt[0], 5), round(pt[1], 5))
+            if key not in seen:
+                seen.add(key)
+                points.append(pt)
+
+    points.sort(key=lambda p: p[1])
+    n = len(points)
+
+    limit_min = -l / 2
+    limit_max = l / 2
+
+    # Plot visible points and labels
+    for x, y in points:
+        if limit_min <= y <= limit_max:
+            ax.plot(x, y, 'ro')
+            ax.text(x + 1, y, f"({x:.1f}, {y + l/2:.1f})", fontsize=8, color='blue')
+
+    below_zero = [i for i, p in enumerate(points) if p[1] < 0]
+    above_zero = [i for i, p in enumerate(points) if p[1] >= 0]
+    middle_indices = below_zero[-2:] + above_zero[:2] if len(below_zero) >= 2 and len(above_zero) >= 2 else list(range(4))
+
+    shaded_pins = []
+
+    def add_pin(indices, color):
+        if all(0 <= idx < n for idx in indices) and len(indices) == 4:
+            if any(limit_min <= points[idx][1] <= limit_max for idx in indices):
+                pin_pts = [points[i] for i in indices]
+                polygon = Polygon(pin_pts, closed=True, facecolor=color, alpha=0.4, edgecolor='black')
+                ax.add_patch(polygon)
+                shaded_pins.extend(indices)
+
+    add_pin(middle_indices, 'orange')
+
+    # Fill pins upward
+    start_up = middle_indices[-1] + 1
+    while start_up + 3 < n:
+        add_pin(list(range(start_up, start_up + 4)), 'skyblue')
+        start_up += 4
+
+    # Fill pins downward
+    start_down = middle_indices[0] - 4
+    while start_down >= 0:
+        add_pin(list(range(start_down, start_down + 4)), 'lightgreen')
+        start_down -= 4
+
+    # Shade edge if partial pins
+    if 0 not in shaded_pins or (n - 1) not in shaded_pins:
+        ends = [points[i] for i in (0, n - 1) if i not in shaded_pins]
+        if len(ends) == 2:
+            p1, p2 = ends
+            p3 = (p1[0], p1[1] + 1)
+            polygon = Polygon([p1, p2, p3], closed=True, facecolor='violet', alpha=0.4, edgecolor='black')
+            ax.add_patch(polygon)
+
+    # Draw guides and labels
+    ax.axhline(0, color='gray', linestyle='--')
+    ax.vlines(0, limit_min, limit_max, colors='black', linewidth=2)
+    ax.text(-4, 0, f"L = {l}", fontsize=14, color='black', va='center', ha='right', rotation='vertical')
+
+    ax.annotate('', xy=(h, limit_min), xytext=(0, limit_min),
+                arrowprops=dict(arrowstyle='->', lw=2, color='black'))
+    ax.text(h, limit_min - 5, f"h = {h}", fontsize=14, color='black', ha='center', va='top')
+
+    ax.set_ylim(limit_min, limit_max)
+    ax.axis('off')
+    ax.set_aspect('equal')
+    ax.set_title(f"Ducktail Joint Pins (ratio = {ratio:.3f}, λ = {lambd})")
+    plt.show()
+
+# ================
+# Auto Run Script
+# ================
+if __name__ == "__main__":
+    plot_ducktail_shape(h, b, l, ratio, lambd)
